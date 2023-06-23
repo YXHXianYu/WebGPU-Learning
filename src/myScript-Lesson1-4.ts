@@ -1,5 +1,5 @@
-import vertexShaderRaw from "./shaders/myShader.vert.wgsl?raw"
-import fragmentShaderRaw from "./shaders/myShader.frag.wgsl?raw"
+import vertexShaderRaw from "./shaders/myShader-Lesson1-4.vert.wgsl?raw"
+import fragmentShaderRaw from "./shaders/myShader-Lesson1-4.frag.wgsl?raw"
 import { vertex, vertexCount } from "./util/myData"
 import {mat4, vec3} from 'gl-matrix'
 

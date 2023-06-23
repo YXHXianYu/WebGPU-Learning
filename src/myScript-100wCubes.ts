@@ -1,10 +1,16 @@
-import vertexShaderRaw from "./shaders/myShader.vert.wgsl?raw"
-import fragmentShaderRaw from "./shaders/myShader.frag.wgsl?raw"
+/**
+ * 在这个代码中，我渲染了100w个固定不动的正方体
+ * 在3060 12G下，通过优化CPU与GPU的数据交换，将GPU性能跑满
+ */
+
+
+import vertexShaderRaw from "./shaders/myShader-Lesson1-4.vert.wgsl?raw"
+import fragmentShaderRaw from "./shaders/myShader-Lesson1-4.frag.wgsl?raw"
 import { vertex, vertexCount } from "./util/myData"
 import { mat4, vec3 } from 'gl-matrix'
 
 // ===== ===== ===== Arguments ===== ===== =====
-const CUBES_NUM = 1000
+const CUBES_NUM = 1000000
 
 // ===== ===== ===== Initialize WebGPU ===== ===== =====
 async function initWebGPU() {
@@ -268,10 +274,10 @@ async function run() {
     }
     for(let i = 0; i < CUBES_NUM; i++) {
         position[i] = {x:0, y:0, z:0}
-        const positionRange = 50
+        const positionRange = 900
         position[i].x = randomRange(-positionRange, positionRange)
         position[i].y = randomRange(-positionRange, positionRange)
-        position[i].z = randomRange(-positionRange, 0) - 70
+        position[i].z = randomRange(-positionRange, 0) - 1200
 
         rotation[i] = {x:0, y:0, z:0}
         rotation[i].x = randomRange(-3.14, 3.14)
@@ -289,7 +295,7 @@ async function run() {
     // ===== Animation =====
     function frame() {
         const ratio = size.width / size.height
-        for(let i = 0; i < CUBES_NUM; i++) {
+        for(let i = 0; firstTime && i < CUBES_NUM; i++) {
             rotation[i].x += rotationSpeed[i].x * commonSpeed
             rotation[i].y += rotationSpeed[i].y * commonSpeed
             rotation[i].z += rotationSpeed[i].z * commonSpeed
@@ -312,7 +318,9 @@ async function run() {
             //     ratio,
             // ) as Float32Array)
         }
-        device.queue.writeBuffer(pipelineObject.mvpMatrixBuffer, 0, mvpMatrixArray)
+        if(firstTime) {
+            device.queue.writeBuffer(pipelineObject.mvpMatrixBuffer, 0, mvpMatrixArray)
+        }
         firstTime = false
         draw(device, context, pipelineObject)
 

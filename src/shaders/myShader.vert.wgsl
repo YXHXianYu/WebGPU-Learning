@@ -12,6 +12,6 @@ fn main(
 ) -> VertexOutput {
     var out: VertexOutput;
     out.position = mvp[index] * position;
-    out.fragPosition = 0.5 * (position + vec4(1.0));
+    out.fragPosition = (position + 2 * vec4(1.0)) / 3;
     return out;
 }
