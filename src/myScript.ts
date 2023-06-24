@@ -1,10 +1,11 @@
 import vertexShaderRaw from "./shaders/myShader.vert.wgsl?raw"
 import fragmentShaderRaw from "./shaders/myShader.frag.wgsl?raw"
-import { vertex, vertexCount } from "./util/cube"
+import * as box from "./util/box"
+import * as sphere from "./util/sphere"
 import { mat4, vec3 } from 'gl-matrix'
 
 // ===== ===== ===== Arguments ===== ===== =====
-const CUBES_NUM = 1000
+const OBJECT_NUM = 1000
 
 // ===== ===== ===== Initialize WebGPU ===== ===== =====
 async function initWebGPU() {
@@ -69,7 +70,7 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
             // 这里的buffers可以使用多个slots，表示js中需要传入的多个TypedArray
             // 这里的attributes也可以有多个，表示每个TypedArray被划分到不同的location
             buffers: [{
-                arrayStride: 5 * 4, // 因为每个顶点有3个数字，所以步长为3
+                arrayStride: 8 * 4, // 因为每个顶点有3个数字，所以步长为3
                 attributes: [{
                     // position
                     shaderLocation: 0,
@@ -78,8 +79,13 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
                 }, {
                     // uv
                     shaderLocation: 1,
-                    offset: 3 * 4,
+                    offset: 6 * 4,
                     format: 'float32x2',
+                }, {
+                    // normal
+                    shaderLocation: 2,
+                    offset: 3 * 4,
+                    format: 'float32x3',
                 }],
             }]
         },
@@ -112,11 +118,44 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
     //     -0.5, -0.5, 0,
     //     0.5, -0.5, 0,
     // ])
-    const vertexBuffer = device.createBuffer({
-        size: vertex.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, // COPY_DST表示这个Buffer可以被writeBuffer写入
-    })
-    device.queue.writeBuffer(vertexBuffer, 0, vertex)
+    // const vertexBuffer = device.createBuffer({
+    //     size: vertex.byteLength,
+    //     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, // COPY_DST表示这个Buffer可以被writeBuffer写入
+    // })
+    // device.queue.writeBuffer(vertexBuffer, 0, vertex)
+
+    const boxBuffer = {
+        vertex: device.createBuffer({
+            label: 'GPUBuffer stores vertex',
+            size: box.vertex.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        }),
+        index: device.createBuffer({
+            label: 'GPUBuffer stores vertex index',
+            size: box.index.byteLength,
+            usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+        }),
+        vertexCount: box.vertexCount,
+        indexCount: box.indexCount,
+    }
+    const sphereBuffer = {
+        vertex: device.createBuffer({
+            label: 'GPUBuffer stores vertex',
+            size: sphere.vertex.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        }),
+        index: device.createBuffer({
+            label: 'GPUBuffer stores vertex index',
+            size: sphere.index.byteLength,
+            usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+        }),
+        vertexCount: sphere.vertexCount,
+        indexCount: sphere.indexCount,
+    }
+    device.queue.writeBuffer(boxBuffer.vertex, 0, box.vertex)
+    device.queue.writeBuffer(boxBuffer.index, 0, box.index)
+    device.queue.writeBuffer(sphereBuffer.vertex, 0, sphere.vertex)
+    device.queue.writeBuffer(sphereBuffer.index, 0, sphere.index)
 
     // ===== color =====
     const color = new Float32Array([
@@ -130,7 +169,7 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
 
     // ===== MVP =====
     const mvpMatrixBuffer = device.createBuffer({
-        size: 4 * 4 * 4 * CUBES_NUM,
+        size: 4 * 4 * 4 * OBJECT_NUM,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     })
 
@@ -142,7 +181,8 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
     })
 
     // ===== Texture =====
-    // 小知识，在浏览器中，webp包含了jpeg/png/gif等格式的优点，所以在开发中，应该优先使用webp格式
+    // 小知识： 在浏览器中，webp包含了jpeg/png/gif等格式的优点，所以在开发中，应该优先使用webp格式
+    // 小知识2：视频格式，推荐VP8/9
     // 获取图片
     const textureUrl = "https://raw.githubusercontent.com/YXHXianYu/WebGPU-Learning/main/resource/XingHui.jpg"
     const res = await fetch(textureUrl)
@@ -199,10 +239,15 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
         }]
     })
 
-    const vertexObject = {
-        vertex,
-        vertexBuffer,
-        vertexCount,
+    // const vertexObject = {
+    //     vertex,
+    //     vertexBuffer,
+    //     vertexCount,
+    // }
+
+    const objectList = {
+        boxBuffer,
+        sphereBuffer,
     }
 
     const colorObject = {
@@ -212,7 +257,7 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
 
     const pipelineObject = {
         pipeline,
-        vertexObject,
+        objectList,
         colorObject,
         mvpMatrixBuffer,
         depthTexture,
@@ -261,10 +306,18 @@ function draw(device: GPUDevice, context: GPUCanvasContext, pipelineObject: any)
         }
     })
     renderPass.setPipeline(pipelineObject.pipeline)
-    renderPass.setVertexBuffer(0, pipelineObject.vertexObject.vertexBuffer)
     renderPass.setBindGroup(0, pipelineObject.group)
     renderPass.setBindGroup(1, pipelineObject.textureGroup)
-    renderPass.draw(pipelineObject.vertexObject.vertexCount, CUBES_NUM) // Vertex会被并行地运行3次
+    let i = 0
+    let n = Object.keys(pipelineObject.objectList).length
+    let delta = Math.floor(OBJECT_NUM / n)
+    for(let objectName in pipelineObject.objectList) {
+        renderPass.setVertexBuffer(0, pipelineObject.objectList[objectName].vertex)
+        renderPass.setIndexBuffer(pipelineObject.objectList[objectName].index, 'uint16')
+        renderPass.drawIndexed(pipelineObject.objectList[objectName].indexCount, delta, 0, 0, (i++) * delta)
+        // console.log(i, objectName)
+    }
+    // renderPass.draw(pipelineObject.vertexObject.vertexCount, CUBES_NUM) // Vertex会被并行地运行3次
 
     renderPass.end()
 
@@ -309,16 +362,16 @@ async function run() {
     const pipelineObject = await initPipeline(device, format, size)
 
     // ===== Arguments =====
-    const mvpMatrixArray = new Float32Array(4 * 4 * CUBES_NUM)
-    const position = new Array(CUBES_NUM)
-    const rotation = new Array(CUBES_NUM)
-    const rotationSpeed = new Array(CUBES_NUM)
+    const mvpMatrixArray = new Float32Array(4 * 4 * OBJECT_NUM)
+    const position = new Array(OBJECT_NUM)
+    const rotation = new Array(OBJECT_NUM)
+    const rotationSpeed = new Array(OBJECT_NUM)
     const commonSpeed = 0.01
     let lookDistanceDelta = 0
     const randomRange = (L: number, R: number) => {
         return Math.random() * (R - L) + L
     }
-    for(let i = 0; i < CUBES_NUM; i++) {
+    for(let i = 0; i < OBJECT_NUM; i++) {
         position[i] = {x:0, y:0, z:0}
         const positionRange = 50
         position[i].x = randomRange(-positionRange, positionRange)
@@ -339,7 +392,7 @@ async function run() {
     // ===== Animation & Rendering =====
     function frame() {
         const ratio = size.width / size.height
-        for(let i = 0; i < CUBES_NUM; i++) {
+        for(let i = 0; i < OBJECT_NUM; i++) {
             rotation[i].x += rotationSpeed[i].x * commonSpeed
             rotation[i].y += rotationSpeed[i].y * commonSpeed
             rotation[i].z += rotationSpeed[i].z * commonSpeed
@@ -377,7 +430,7 @@ async function run() {
         const value = (e.target as HTMLInputElement).value
         console.log(value)
         // change 
-        lookDistanceDelta = Math.floor(value.toString())
+        lookDistanceDelta = Math.floor(+value)
     })
 
     document.querySelector('input[type="color"]')?.addEventListener('input', (e: Event) => {
