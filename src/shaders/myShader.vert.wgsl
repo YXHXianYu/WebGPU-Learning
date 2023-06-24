@@ -3,15 +3,18 @@
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) fragPosition: vec4<f32>,
+    @location(1) fragUV: vec2<f32>,
 };
 
 @vertex
 fn main(
     @builtin(instance_index) index: u32,
-    @location(0) position: vec4<f32>
+    @location(0) position: vec4<f32>,
+    @location(1) uv: vec2<f32>,
 ) -> VertexOutput {
     var out: VertexOutput;
     out.position = mvp[index] * position;
     out.fragPosition = (position + 2 * vec4(1.0)) / 3;
+    out.fragUV = uv;
     return out;
 }

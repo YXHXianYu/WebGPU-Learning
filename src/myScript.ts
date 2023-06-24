@@ -1,6 +1,6 @@
 import vertexShaderRaw from "./shaders/myShader.vert.wgsl?raw"
 import fragmentShaderRaw from "./shaders/myShader.frag.wgsl?raw"
-import { vertex, vertexCount } from "./util/myData"
+import { vertex, vertexCount } from "./util/cube"
 import { mat4, vec3 } from 'gl-matrix'
 
 // ===== ===== ===== Arguments ===== ===== =====
@@ -69,11 +69,17 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
             // 这里的buffers可以使用多个slots，表示js中需要传入的多个TypedArray
             // 这里的attributes也可以有多个，表示每个TypedArray被划分到不同的location
             buffers: [{
-                arrayStride: 3 * 4, // 因为每个顶点有3个数字，所以步长为3
+                arrayStride: 5 * 4, // 因为每个顶点有3个数字，所以步长为3
                 attributes: [{
+                    // position
                     shaderLocation: 0,
                     offset: 0,
                     format: 'float32x3',
+                }, {
+                    // uv
+                    shaderLocation: 1,
+                    offset: 3 * 4,
+                    format: 'float32x2',
                 }],
             }]
         },
@@ -135,6 +141,48 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
     })
 
+    // ===== Texture =====
+    // 小知识，在浏览器中，webp包含了jpeg/png/gif等格式的优点，所以在开发中，应该优先使用webp格式
+    // 获取图片
+    const textureUrl = "https://raw.githubusercontent.com/YXHXianYu/WebGPU-Learning/main/resource/XingHui.jpg"
+    const res = await fetch(textureUrl)
+    const img = await res.blob()
+    const bitmap = await createImageBitmap(img)
+    // 创建texture
+    const textureSize = [bitmap.width, bitmap.height]
+    const texture = device.createTexture({
+        size: textureSize,
+        format: 'rgba8unorm',
+        usage:
+            GPUTextureUsage.TEXTURE_BINDING |
+            GPUTextureUsage.COPY_DST |
+            GPUTextureUsage.RENDER_ATTACHMENT,
+    })
+    // 写入texture
+    device.queue.copyExternalImageToTexture(
+        { source: bitmap },
+        { texture: texture },
+        textureSize,
+    )
+    // 配置sampler
+    const sampler = device.createSampler({
+        // addressModeU: 'repeat',
+        // addressModeV: 'repeat',
+        magFilter: 'linear',
+        minFilter: 'linear',
+    })
+    const textureGroup = device.createBindGroup({
+        label: 'Texture Group with Texture and Sampler',
+        layout: pipeline.getBindGroupLayout(1),
+        entries: [{
+            binding: 0,
+            resource: texture.createView(),
+        }, {
+            binding: 1,
+            resource: sampler,
+        }],
+    })
+
     // ===== Package =====
     const group = device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
@@ -169,6 +217,7 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
         mvpMatrixBuffer,
         depthTexture,
         group,
+        textureGroup,
     }
 
     return pipelineObject
@@ -214,6 +263,7 @@ function draw(device: GPUDevice, context: GPUCanvasContext, pipelineObject: any)
     renderPass.setPipeline(pipelineObject.pipeline)
     renderPass.setVertexBuffer(0, pipelineObject.vertexObject.vertexBuffer)
     renderPass.setBindGroup(0, pipelineObject.group)
+    renderPass.setBindGroup(1, pipelineObject.textureGroup)
     renderPass.draw(pipelineObject.vertexObject.vertexCount, CUBES_NUM) // Vertex会被并行地运行3次
 
     renderPass.end()
@@ -259,11 +309,13 @@ async function run() {
     const pipelineObject = await initPipeline(device, format, size)
 
     // ===== Arguments =====
-    let position = new Array(CUBES_NUM)
-    let rotation = new Array(CUBES_NUM)
-    let rotationSpeed = new Array(CUBES_NUM)
-    let commonSpeed = 0.01
-    let randomRange = (L: number, R: number) => {
+    const mvpMatrixArray = new Float32Array(4 * 4 * CUBES_NUM)
+    const position = new Array(CUBES_NUM)
+    const rotation = new Array(CUBES_NUM)
+    const rotationSpeed = new Array(CUBES_NUM)
+    const commonSpeed = 0.01
+    let lookDistanceDelta = 0
+    const randomRange = (L: number, R: number) => {
         return Math.random() * (R - L) + L
     }
     for(let i = 0; i < CUBES_NUM; i++) {
@@ -271,7 +323,7 @@ async function run() {
         const positionRange = 50
         position[i].x = randomRange(-positionRange, positionRange)
         position[i].y = randomRange(-positionRange, positionRange)
-        position[i].z = randomRange(-positionRange, 0) - 70
+        position[i].z = randomRange(-positionRange, 0) - 50
 
         rotation[i] = {x:0, y:0, z:0}
         rotation[i].x = randomRange(-3.14, 3.14)
@@ -283,10 +335,8 @@ async function run() {
         rotationSpeed[i].y = randomRange(-1.0, 1.0)
         rotationSpeed[i].z = randomRange(-1.0, 1.0)
     }
-    const mvpMatrixArray = new Float32Array(4 * 4 * CUBES_NUM)
-    let firstTime = true
 
-    // ===== Animation =====
+    // ===== Animation & Rendering =====
     function frame() {
         const ratio = size.width / size.height
         for(let i = 0; i < CUBES_NUM; i++) {
@@ -300,7 +350,7 @@ async function run() {
             if(rotation[i].z < -3.14) rotation[i].z += 6.28
             if(rotation[i].z > 3.14) rotation[i].z -= 6.28
             mvpMatrixArray.set((getMVPMatrix(
-                position[i],
+                {x: position[i].x, y: position[i].y, z: position[i].z + lookDistanceDelta},
                 rotation[i],
                 {x:1, y:1, z:1},
                 ratio,
@@ -313,7 +363,6 @@ async function run() {
             // ) as Float32Array)
         }
         device.queue.writeBuffer(pipelineObject.mvpMatrixBuffer, 0, mvpMatrixArray)
-        firstTime = false
         draw(device, context, pipelineObject)
 
         requestAnimationFrame(frame)
@@ -323,8 +372,15 @@ async function run() {
     // document.querySelectorAll('input[type="range"]')?.forEach((input) => {
     //     input.addEventListener('input', drawWithMVP)
     // })
+    document.querySelector('input[type="range"]')?.addEventListener('input', (e: Event) => {
+        // get input value
+        const value = (e.target as HTMLInputElement).value
+        console.log(value)
+        // change 
+        lookDistanceDelta = Math.floor(value.toString())
+    })
 
-    document.querySelector('input[type="color"]')?.addEventListener('input', (e: Event)=>{
+    document.querySelector('input[type="color"]')?.addEventListener('input', (e: Event) => {
         // get input color
         const color = (e.target as HTMLInputElement).value
         console.log(color)
