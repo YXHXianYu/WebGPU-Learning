@@ -1,63 +1,99 @@
-import vertexShaderRaw from "./shaders/myShader.vert.wgsl?raw"
-import fragmentShaderRaw from "./shaders/myShader.frag.wgsl?raw"
-import * as box from "./util/box"
-import * as sphere from "./util/sphere"
+import vertexShaderRaw from "../shaders/myShader.vert.wgsl?raw"
+import fragmentShaderRaw from "../shaders/myShader.frag.wgsl?raw"
+import * as sphere from "../util/sphere"
 import { mat4, vec3 } from 'gl-matrix'
 
-// ===== ===== ===== Arguments ===== ===== =====
-const OBJECT_NUM = 1000
+/**
+ * 蓝色空间渲染器
+ * 
+ * 渲染星图
+ * 
+ * 由于渲染器需要异步初始化，所以必须按照如下方法进行实例化
+ *   let renderer: BlueSpaceRenderer
+ *   try {
+ *     renderer = new BlueSpaceRenderer()
+ *     await renderer.setup()
+ *   } catch (error) {
+ *     console.log("Error: ", error)
+ *   }
+ * 具体详见：https://stackoverflow.com/questions/35743426/async-constructor-functions-in-typescript
+ */
+class BlueSpaceRenderer {
+    // about renderer
+    private haveSetup: boolean = false
+    private device: GPUDevice | null = null
+    private context: GPUCanvasContext | null = null
+    private format: GPUTextureFormat | null = null
+    private canvasSize: {width: number, height: number} = {width: 0, height: 0}
 
-// ===== ===== ===== Initialize WebGPU ===== ===== =====
-async function initWebGPU() {
-    const canvas = document.querySelector('canvas')
-    if(!canvas) throw new Error('Canvas is null')
+    constructor() {}
 
-    if(!navigator.gpu) {
-        throw new Error('Not support WebGPU.')
+    async setup() {
+        await this.initWebGPU()
+        await this.initPipeline()
+
+        // 初始化完毕
+        this.haveSetup = true
     }
-    const adapter = await navigator.gpu.requestAdapter({
-        powerPreference: 'high-performance' // 这里只是一个期望选项
-    })
-    if(!adapter) {
-        throw new Error('Adapter is null.')
-    }
-    const device = await adapter.requestDevice({
-        requiredFeatures: [],
-        requiredLimits: {
-            maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize
+
+    async initWebGPU() {
+        // canvas
+        const canvas = document.querySelector('canvas')
+        if(!canvas) {
+            throw new Error("Can't find canvas in page.")
         }
-    })
-    console.log(adapter, device)
-    
-    const context = canvas.getContext('webgpu') as GPUCanvasContext
-    const format = navigator.gpu.getPreferredCanvasFormat()
-    canvas.width = canvas.clientWidth * window.devicePixelRatio,
-    canvas.height = canvas.clientHeight * window.devicePixelRatio
-    context.configure({
-        device,
-        format,
-    });
+        // webgpu
+        if(!navigator.gpu) {
+            throw new Error("Not support WebGPU.")
+        }
+        // adapter
+        const adapter = await navigator.gpu.requestAdapter({
+            powerPreference: 'high-performance' // 默认设置高性能模式
+        })
+        if(!adapter) {
+            throw new Error("Adapter is null.")
+        }
+        // device
+        const device = await adapter.requestDevice({
+            requiredFeatures: [],
+            requiredLimits: {
+                maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize
+            }
+        })
+        // context
+        const context = canvas.getContext('webgpu') as GPUCanvasContext
+        // format
+        const format = navigator.gpu.getPreferredCanvasFormat()
+        // canvasSize
+        canvas.width = canvas.clientWidth * window.devicePixelRatio
+        canvas.height = canvas.clientHeight * window.devicePixelRatio
+        context.configure({
+            device,
+            format,
+        })
+        
+        // this
+        this.device = device
+        this.context = context
+        this.format = format
+        this.canvasSize = {width: canvas.width, height: canvas.height}
+    }
 
-    // console.log(format)
-
-    // 这是JSON在JS中的一个简写方式
-    // 如果key名和value名一致，可以省略key，只写value
-    const size = {width: canvas.width, height: canvas.height}
-    return {adapter, device, context, format, size}
+    // 想在管线中传入数据，需要有以下这几步
+    // 1. 定义数据
+    // 1.1 定义TypedArray
+    // 1.2 定义Buffer (size, usage)
+    // 1.3 写入Buffer (device.queue.writeBuffer)
+    // 2. 修改Pipeline
+    // 2.1 修改Pipeline的属性，设置解析方式
+    // 3. 在draw时进行使用
+    // 3.1 传入对应location (setVertexBuffer)
+    // 3.2 在draw时指定绘制的顶点个数
+    async initPipeline() {
+        // pipeline
+    }
 }
 
-// 想在管线中传入数据，需要有以下这几步
-// 1. 定义数据
-// 1.1 定义TypedArray
-// 1.2 定义Buffer (size, usage)
-// 1.3 写入Buffer (device.queue.writeBuffer)
-// 2. 修改Pipeline
-// 2.1 修改Pipeline的属性，设置解析方式
-// 3. 在draw时进行使用
-// 3.1 传入对应location (setVertexBuffer)
-// 3.2 在draw时指定绘制的顶点个数
-
-// ===== ===== ===== Initialize Pipeline ===== ===== =====
 async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {width: number, height: number}) {
     // ===== Pipeline =====
     const descriptor: GPURenderPipelineDescriptor = {
@@ -124,20 +160,6 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
     // })
     // device.queue.writeBuffer(vertexBuffer, 0, vertex)
 
-    const boxBuffer = {
-        vertex: device.createBuffer({
-            label: 'GPUBuffer stores vertex',
-            size: box.vertex.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        }),
-        index: device.createBuffer({
-            label: 'GPUBuffer stores vertex index',
-            size: box.index.byteLength,
-            usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-        }),
-        vertexCount: box.vertexCount,
-        indexCount: box.indexCount,
-    }
     const sphereBuffer = {
         vertex: device.createBuffer({
             label: 'GPUBuffer stores vertex',
@@ -152,8 +174,6 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
         vertexCount: sphere.vertexCount,
         indexCount: sphere.indexCount,
     }
-    device.queue.writeBuffer(boxBuffer.vertex, 0, box.vertex)
-    device.queue.writeBuffer(boxBuffer.index, 0, box.index)
     device.queue.writeBuffer(sphereBuffer.vertex, 0, sphere.vertex)
     device.queue.writeBuffer(sphereBuffer.index, 0, sphere.index)
 
@@ -246,7 +266,6 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
     // }
 
     const objectList = {
-        boxBuffer,
         sphereBuffer,
     }
 
@@ -396,12 +415,12 @@ async function run() {
             rotation[i].x += rotationSpeed[i].x * commonSpeed
             rotation[i].y += rotationSpeed[i].y * commonSpeed
             rotation[i].z += rotationSpeed[i].z * commonSpeed
-            if(rotation[i].x < -3.14) rotation[i].x += 6.28
-            if(rotation[i].x > 3.14) rotation[i].x -= 6.28
-            if(rotation[i].y < -3.14) rotation[i].y += 6.28
-            if(rotation[i].y > 3.14) rotation[i].y -= 6.28
-            if(rotation[i].z < -3.14) rotation[i].z += 6.28
-            if(rotation[i].z > 3.14) rotation[i].z -= 6.28
+            // if(rotation[i].x < -3.14) rotation[i].x += 6.28
+            // if(rotation[i].x > 3.14) rotation[i].x -= 6.28
+            // if(rotation[i].y < -3.14) rotation[i].y += 6.28
+            // if(rotation[i].y > 3.14) rotation[i].y -= 6.28
+            // if(rotation[i].z < -3.14) rotation[i].z += 6.28
+            // if(rotation[i].z > 3.14) rotation[i].z -= 6.28
             mvpMatrixArray.set((getMVPMatrix(
                 {x: position[i].x, y: position[i].y, z: position[i].z + lookDistanceDelta},
                 rotation[i],

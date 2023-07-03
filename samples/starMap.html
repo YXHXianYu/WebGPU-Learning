@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orillusion | Hello WebGPU</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            color: #fff;
+            display: flex;
+            text-align: center;
+            flex-direction: column;
+            justify-content: center;
+        }
+        p{
+            font-size: 14px;
+            margin:0
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+        .inputs {
+            position: fixed;
+            top: 1em;
+            right: 1em;
+            display: flex;
+            flex-direction: column;
+            gap: 1em;
+            text-align: right;
+            width: 100px;
+        }
+        input{
+            width: 100%;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <canvas></canvas>
+    <div class="inputs">
+        <input type="color" value="#FFFF00"/>
+        <input type="range" id="lookDistance" min="-80" max="80" step="any" value="0"/>
+    </div>
+    <script type="module" src="/src/starMap/starMap.ts"></script>
+</body>
+</html>

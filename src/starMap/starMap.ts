@@ -1,7 +1,6 @@
-import vertexShaderRaw from "./shaders/myShader.vert.wgsl?raw"
-import fragmentShaderRaw from "./shaders/myShader.frag.wgsl?raw"
-import * as box from "./util/box"
-import * as sphere from "./util/sphere"
+import vertexShaderRaw from "../shaders/myShader.vert.wgsl?raw"
+import fragmentShaderRaw from "../shaders/myShader.frag.wgsl?raw"
+import * as sphere from "../util/sphere"
 import { mat4, vec3 } from 'gl-matrix'
 
 // ===== ===== ===== Arguments ===== ===== =====
@@ -124,20 +123,6 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
     // })
     // device.queue.writeBuffer(vertexBuffer, 0, vertex)
 
-    const boxBuffer = {
-        vertex: device.createBuffer({
-            label: 'GPUBuffer stores vertex',
-            size: box.vertex.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        }),
-        index: device.createBuffer({
-            label: 'GPUBuffer stores vertex index',
-            size: box.index.byteLength,
-            usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-        }),
-        vertexCount: box.vertexCount,
-        indexCount: box.indexCount,
-    }
     const sphereBuffer = {
         vertex: device.createBuffer({
             label: 'GPUBuffer stores vertex',
@@ -152,8 +137,6 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
         vertexCount: sphere.vertexCount,
         indexCount: sphere.indexCount,
     }
-    device.queue.writeBuffer(boxBuffer.vertex, 0, box.vertex)
-    device.queue.writeBuffer(boxBuffer.index, 0, box.index)
     device.queue.writeBuffer(sphereBuffer.vertex, 0, sphere.vertex)
     device.queue.writeBuffer(sphereBuffer.index, 0, sphere.index)
 
@@ -246,7 +229,6 @@ async function initPipeline(device: GPUDevice, format: GPUTextureFormat, size: {
     // }
 
     const objectList = {
-        boxBuffer,
         sphereBuffer,
     }
 
@@ -396,12 +378,12 @@ async function run() {
             rotation[i].x += rotationSpeed[i].x * commonSpeed
             rotation[i].y += rotationSpeed[i].y * commonSpeed
             rotation[i].z += rotationSpeed[i].z * commonSpeed
-            if(rotation[i].x < -3.14) rotation[i].x += 6.28
-            if(rotation[i].x > 3.14) rotation[i].x -= 6.28
-            if(rotation[i].y < -3.14) rotation[i].y += 6.28
-            if(rotation[i].y > 3.14) rotation[i].y -= 6.28
-            if(rotation[i].z < -3.14) rotation[i].z += 6.28
-            if(rotation[i].z > 3.14) rotation[i].z -= 6.28
+            // if(rotation[i].x < -3.14) rotation[i].x += 6.28
+            // if(rotation[i].x > 3.14) rotation[i].x -= 6.28
+            // if(rotation[i].y < -3.14) rotation[i].y += 6.28
+            // if(rotation[i].y > 3.14) rotation[i].y -= 6.28
+            // if(rotation[i].z < -3.14) rotation[i].z += 6.28
+            // if(rotation[i].z > 3.14) rotation[i].z -= 6.28
             mvpMatrixArray.set((getMVPMatrix(
                 {x: position[i].x, y: position[i].y, z: position[i].z + lookDistanceDelta},
                 rotation[i],
